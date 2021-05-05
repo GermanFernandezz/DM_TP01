@@ -44,27 +44,29 @@ danceability_features_charts_outliers <- features_charts_outliers[c(1:4)][featur
 head(danceability_features_charts_outliers) #"Bing Crosby/White Christmas" "The Weeknd/Alone Again"
 
 
-features = mongo(collection = "features_avg_mejorPosition", db = "Spotify_DM_TP" )
+features = mongo(collection = "features_avg_mejorPosition", db = "Spotify_DM_TP" ) #cargo base de datos mas completa de features
 features$count()
 
-features <- features$find()
-features <- features[!duplicated(features), ]
+features <- features$find() #hago data frame de features
+features <- features[!duplicated(features), ] #elimino duplicados
 
 
-charts_entera = mongo(collection = "charts", db = "Spotify_DM_TP" )
+charts_entera = mongo(collection = "charts", db = "Spotify_DM_TP" ) #base de datos charts completa
 charts_entera$count() # 63600
-charts_entera <- charts_entera$find()
-charts_entera <- charts_entera[!duplicated(charts_entera), ]
-charts_features <- merge(charts_entera, features, by.x="artist_track", by.y="artist_track") #integro features con los charts_outliers
+charts_entera <- charts_entera$find() #hago data frame
+charts_entera <- charts_entera[!duplicated(charts_entera), ] #elimino duplicados
+charts_features <- merge(charts_entera, features, by.x="artist_track", by.y="artist_track") #integro features con los charts
 names(charts_features)
-charts_features <- charts_features[c(1,2,7,8, 11,13, 12)]
-charts_features <- charts_features[!duplicated(charts_features), ]
-danceability_outliers <- charts_features[charts_features$artist_track == danceability_features_charts_outliers$artist_track, ]
-danceability_outliers <- danceability_outliers[!duplicated(danceability_outliers$week_start), ]
+charts_features <- charts_features[c(1,2,7,8, 11,13, 12)] #me quedo solo con las columnas que me interesan de "charts_features"
+charts_features <- charts_features[!duplicated(charts_features), ] # elimino duplicados
+danceability_outliers <- charts_features[charts_features$artist_track == danceability_features_charts_outliers$artist_track, ] #nuevo data frame con los resultados de los outliers detectados
+danceability_outliers <- danceability_outliers[!duplicated(danceability_outliers$week_start), ] # elimino duplicados de week_start para limpiar el data frame 
+
+#White Christmas: todos los años aparece en los charts en epocas navideñas
+#Alone Again coincide con el lanzamiento del album al que pertenece, solo estuvo una semana en los charts
 
 
 
-#fui a la base de datos, lo busqué y encontré que en nov empieza a escalar posiciones y en diciembre baja. ALone Again coincide con fecha de lanzamiento del album
 
 boxplot(features_charts_outliers$avg_energy)
 energy_features_charts_outliers <- features_charts_outliers[c(1,5)]
