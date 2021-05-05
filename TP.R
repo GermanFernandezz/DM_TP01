@@ -32,22 +32,46 @@ charts_outliers <- charts_outliers[!duplicated(charts_outliers$artist_track), ] 
 ##############
 #ANALISIS DE DATOS DE FEATURES
 features_avg_pos = mongo(collection = "features_avg_mejorPosition_red", db = "Spotify_DM_TP" )
-features_avg_pos$count() # 1998
+features_avg_pos$count() # 1997
 
-df_features_avg_pos <- features_avg_pos$find() #paso a data frame
+features_avg_pos <- features_avg_pos$find() #paso a data frame
 
-features_charts_outliers <- merge(charts_outliers, df_features_avg_pos, by.x="artist_track", by.y="artist_track") #integro features con los charts_outliers
-str(features_charts_outliers)
+features_charts_outliers <- merge(charts_outliers, features_avg_pos, by.x="artist_track", by.y="artist_track") #integro features con los charts_outliers
+names(features_charts_outliers)
 
 boxplot(features_charts_outliers$avg_danceability) #se ven dos outliers
-danceability_features_charts_outliers <- features_charts_outliers[1][features_charts_outliers$avg_danceability < boxplot(features_charts_outliers$avg_danceability)$stats[1],] #identifico esos dos outliers 
+danceability_features_charts_outliers <- features_charts_outliers[c(1:4)][features_charts_outliers$avg_danceability < boxplot(features_charts_outliers$avg_danceability)$stats[1],] #identifico esos dos outliers 
 head(danceability_features_charts_outliers) #"Bing Crosby/White Christmas" "The Weeknd/Alone Again"
 
-#fui a la base de datos, lo busqué y encontré que en nov empieza a escalar posiciones y en diciembre baja
+
+features = mongo(collection = "features_avg_mejorPosition", db = "Spotify_DM_TP" )
+features$count()
+
+features <- features$find()
+features <- features[!duplicated(features), ]
 
 
+charts_entera = mongo(collection = "charts", db = "Spotify_DM_TP" )
+charts_entera$count() # 63600
+charts_entera <- charts_entera$find()
+charts_entera <- charts_entera[!duplicated(charts_entera), ]
+charts_features <- merge(charts_entera, features, by.x="artist_track", by.y="artist_track") #integro features con los charts_outliers
+names(charts_features)
+charts_features <- charts_features[c(1,2,7,8, 11,13, 12)]
+charts_features <- charts_features[!duplicated(charts_features), ]
+danceability_outliers <- charts_features[charts_features$artist_track == danceability_features_charts_outliers$artist_track, ]
+danceability_outliers <- danceability_outliers[!duplicated(danceability_outliers$week_start), ]
+
+
+
+#fui a la base de datos, lo busqué y encontré que en nov empieza a escalar posiciones y en diciembre baja. ALone Again coincide con fecha de lanzamiento del album
 
 boxplot(features_charts_outliers$avg_energy)
+energy_features_charts_outliers <- features_charts_outliers[c(1,5)]
+head(energy_features_charts_outliers)
+
+
+
 boxplot(features_charts_outliers$avg_loudness)
 boxplot(features_charts_outliers$avg_speechiness)
 boxplot(features_charts_outliers$avg_acousticness)
