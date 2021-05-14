@@ -202,22 +202,67 @@ ggplot(artistas_canciones_streams, aes(x=Tracks, y=log_streams))+
 
 #Analisis multvariado
 
-library(isotree)
-set.seed(1)
+#library(isotree)
+#set.seed(1)
 
 #Ajusto un modelo #agrego la columna
-artistas_canciones_streams$iso <- isolation.forest(artistas_canciones_streams[,c(3:4)], ntrees = 10, output_score=TRUE)$score
+#artistas_canciones_streams$iso <- isolation.forest(artistas_canciones_streams[,c(2:3)], ntrees = 7, output_score=TRUE)$score
 
 #armo tabla
-top_iso_streams <- head(artistas_canciones_streams[order(artistas_canciones_streams$iso, decreasing = TRUE),],3)
+#top_iso_streams <- head(artistas_canciones_streams[order(artistas_canciones_streams$iso, decreasing = TRUE),],5)
 
-artistas_canciones_streams %>% mutate(Color = ifelse(iso > 0.6, "blue", "pink")) %>%
-  ggplot(aes(x = Tracks, y= log_streams, color = Color))+
-  geom_point()+
-  scale_color_identity()
+#artistas_canciones_streams %>% mutate(Color = ifelse(iso>0.59, "blue", "pink")) %>%
+#  ggplot(aes(x = Tracks, y= log_streams, color = Color))+
+#  geom_point()+
+#  scale_color_identity()
 
 #Outliers: BTS, Post Malone, Taylor Swift, Bad Bunny
 
-##ANALIZO LAS CANCIONES 
+#DISTANCIA DE MAHALANOBIS
+
+#vector_medias_streams = colMeans(artistas_canciones_streams[,3:4])
+#matriz_var_cov_streams = cov(artistas_canciones_streams[,3:4])
+#creamos una variable con la distancia
+#artistas_canciones_streams$maha = sqrt(mahalanobis(artistas_canciones_streams[,3:4],vector_medias_streams,matriz_var_cov_streams))
+
+
+##ANALIZO LAS CANCIONES de los que tienen mas streams pero estan por arriba de las 40 canciones
+#Post Malone, Drake, Juice WRLD, Ariana Grande, Bad Bunny.
+
+library(tidyverse)
+
+artistas_populares <- charts_audio_features1 %>% filter(artist == 'Post Malone' | artist=='Drake' | artist == 'Juice WRLD' | artist=='Ariana Grande'| artist == 'Bad Bunny')
+
+#saco columnas
+artistas_populares$Loudness <- NULL
+artistas_populares$artist_track <- NULL
+artistas_populares$Tempo <- NULL
+artistas_populares$Duration <- NULL
+artistas_populares$track_name <- NULL
+artistas_populares$Streams <- NULL
+colnames(artistas_populares)[1] <- "Artist"
+
+#(esta mal)
+#ggplot(artistas_populares, aes(x = Danceability, y = Energy, color = Artist)) +  # ggplot function
+#  geom_boxplot()
+
+boxplot(Danceability ~ Artist, data = artistas_populares)
+boxplot(Energy ~ Artist, data = artistas_populares)
+boxplot(Speechiness ~ Artist, data = artistas_populares)
+boxplot(Acousticness ~ Artist, data = artistas_populares)
+boxplot(Liveness ~ Artist, data = artistas_populares)
+boxplot(Instrumentalness ~ Artist, data = artistas_populares)
+boxplot(Valence ~ Artist, data = artistas_populares)
+
+
+
+
+
+
+
+
+
+
+
 
 
