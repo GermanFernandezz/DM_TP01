@@ -1,0 +1,413 @@
+library(mongolite)
+library(dplyr)
+library(fmsb)
+library(modeest)
+library(ggplot2)
+
+
+# 1. Analisis temporal
+
+# 1.1 Obteniendo datos desde Mongo
+
+track_features = mongo(collection = "track_features", db = "DMUBA_SPOTIFY" )
+charts = mongo(collection = "charts_limpio_anio", db = "DMUBA_SPOTIFY" )
+
+# 1.2 Conversión a DataFrame
+
+df_track_features <- track_features$find()
+df_charts <- charts$find()
+
+# 1.3 Eliminación de duplicados
+
+df_track_features <- df_track_features[!duplicated(df_track_features), ]
+df_charts <- df_charts[!duplicated(df_charts), ]
+View(df_track_features)
+
+# 1.4 Modificación de nombres de columnas
+
+colnames(df_track_features)[3] <- "danceability"
+colnames(df_track_features)[4] <- "energy"
+colnames(df_track_features)[5] <- "loudness"
+colnames(df_track_features)[6] <- "speechiness"
+colnames(df_track_features)[7] <- "acousticness"
+colnames(df_track_features)[8] <- "instrumentalness"
+colnames(df_track_features)[9] <- "liveness"
+colnames(df_track_features)[10] <- "valence"
+colnames(df_track_features)[11] <- "tempo"
+colnames(df_track_features)[12] <- "duration"
+
+# 1.5 Elimino columnas de track_features
+
+borrar = c("loudness","instrumentalness","tempo")
+df_track_features = df_track_features[,!(names(df_track_features) %in% borrar)]
+View(df_track_features)
+
+# 1.6 1er Merge entre track_features y charts para trabajar con datos completos
+
+charts_features = merge(df_charts, df_track_features, by.x = "track_id",  by.y = "track_id")
+names(charts_features)
+View(charts_features)
+
+# 1.7 Obtención de las 20 canciones mas escuchadas por año
+
+df_2018 = charts_features %>% filter(year_start==2018) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(20,streams) 
+df_2019 = charts_features %>% filter(year_start==2019) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(20,streams)
+df_2020 = charts_features %>% filter(year_start==2020) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(20,streams)
+df_2021 = charts_features %>% filter(year_start==2021) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(20,streams)
+
+# 1.8 Unión de las 20 canciones de cada año en un único dataframe
+
+top20anual_tracks = rbind(df_2018,df_2019,df_2020,df_2021)
+
+# 1.9 2do Merge entre los tracks mas escuchados con audio_features para obtener las características de las canciones
+
+top20anual_features = merge(top20anual_tracks,df_track_features,by.x = "track_id",by.y = "track_id")
+top20anual_features = top20anual_features %>% arrange(year,desc(streams))
+View(top20anual_features)
+
+
+# 1.10 Parametros para grafico de estrellas
+
+max_min <- data.frame(danceability = c(0.9350,0.3920),
+                      energy = c(0.9040,0.2250),
+                      speechiness = c(0.38900,0.02990),
+                      acousticness = c(0.90200,0.00104),
+                      liveness = c(0.68800,0.05500),
+                      valence = c(0.9150,0.0927),
+                      duration = c(417920,119133))
+
+rownames(max_min) <- c("Max","Min")
+
+
+
+
+#######################################
+## --------------- 2018 ------------- #
+#######################################
+
+
+
+df_medias2018 = apply(top20anual_features[1:20,5:11],2,mean,na.rm = TRUE)
+df_medias2018
+# En el 2018 las canciones del ranking tendieron a ser:
+# - bailables
+# - energicas
+# - muy melodicas
+# - poco acusticas
+# - canciones que no fueron grabadas en vivo
+# - canciones con una duración de 3.67 min.
+# - canciones con un promedio de valence de 0.5, para poder dar mayores certezas respecto a si la tendencia son canciones 
+# positivas o negativas realizo un histograma. 
+
+hist(top20anual_features[1:20,10], main = "Histograma de $valence")
+# Los datos mostrados por el histograma indican que el 75% de las canciones se encuentra en el rango de 0.3 a 0.6, con lo cual
+# las canciones se encuentran en un termino medio respecto a si las canciones son positivas o negativas.
+
+# Grafico de Estrella
+
+df_radar2018 = rbind(max_min,df_medias2018) 
+radar_2018 = df_radar2018[c("Max","Min","3"),]
+View(radar_2018)
+radarchart(radar_2018, title= "Media de caracteristicas de tracks del 2018")
+
+# Mediana y Moda
+
+apply(top20anual_features[1:20,5:11],2,median,na.rm = TRUE)
+apply(top20anual_features[1:20,5:11],2,mfv,na.rm = TRUE)
+
+# la distribución para todas las variables es n-modal y las modas de cada variable reflejan las tendencias descriptas con los valores
+# de las medias.
+
+# Varianza
+
+apply(top20anual_features[1:20,5:11],2,FUN = var, na.rm = TRUE)
+# La distribucion de los datos de todas las variables esta muy concentrada, salvo la variable duration cuyos datos presentan una
+# varianza alta indicando que los datos estan muy dispersos.
+
+# Desvio estandar y Rango
+
+apply(top20anual_features[1:20,5:11],2,FUN = sd, na.rm = TRUE)
+apply(top20anual_features[1:20,5:11],2,FUN = range,na.rm = TRUE)
+# Tal como lo muestran los valores de varianza obtenidos, la variable duration tiene una distribución muy dispersa y las otras 
+# estan muy concentradas.
+
+
+# Boxplot
+
+boxplot(top20anual_features[1:20,3], main = "Boxplot de streams 2018", ylab="Cantidad de streams")
+# La distribución de los streams presenta una asimetria positiva. No se observan valores alejados.
+
+# Histograma
+
+hist(top20anual_features[1:20,3], main = "Histograma de streams 2018")
+# Tal como lo mostraba el box-plot los datos presentan una asimetria positiva
+
+
+
+#######################################
+## --------------- 2019 ------------- #
+#######################################
+
+
+df_medias2019 = apply(top20anual_features[21:40,5:11],2,mean,na.rm = TRUE)
+df_medias2019
+# En el 2019 las canciones del ranking tendieron a ser:
+# - bailables
+# - energicas
+# - melodicas
+# - poco acusticas
+# - canciones que no fueron grabadas en vivo
+# - canciones con una duración promedio de 3.5 min.
+# - canciones con un promedio de valence de 0.5, para poder dar mayores certezas respecto a si la tendencia son canciones 
+# positivas o negativas realizo un histograma de dicha variable. 
+
+hist(top20anual_features[21:40,10], main = "Histograma de $valence")
+# Los datos mostrados por el histograma indican que el 70% de las canciones se encuentra en el rango de 0.4 a 0.7, con lo cual
+# las canciones se encuentran en un termino medio respecto a positividad o negatividad.
+
+
+# Grafico de Estrella
+
+df_radar2019 = rbind(max_min,df_medias2019) 
+radar_2019 = df_radar2019[c("Max","Min","3"),]
+View(radar_2019)
+radarchart(radar_2019, title= "Media de caracteristicas de tracks del 2019")
+
+
+# Mediana y Moda
+
+apply(top20anual_features[21:40,5:11],2,median,na.rm = TRUE)
+apply(top20anual_features[21:40,5:11],2,mfv,na.rm = TRUE)
+# la distribución para todas las variables es n-modal, salvo para el valance; las modas de cada variable reflejan las tendencias 
+# descriptas con los valores de las medias.
+
+# Varianza
+
+apply(top20anual_features[21:40,5:11],2,FUN = var, na.rm = TRUE)
+# La distribucion de los datos de todas las variables esta muy concentrada, salvo la variable duration cuyos datos 
+# presentan una varianza alta indicando que los datos estan muy dispersos.
+
+# Desvio estandar y Rango
+
+apply(top20anual_features[21:40,5:11],2,FUN = sd, na.rm = TRUE)
+apply(top20anual_features[21:40,5:11],2,FUN = range,na.rm = TRUE)
+# Tal como lo muestran los valores de varianza obtenidos, la variable duration tiene una distribución muy dispersa 
+# y las otras estan muy concentradas.
+
+
+# Boxplot
+
+boxplot(top20anual_features[21:40,3], main = "Boxplot de streams 2019")
+# La distribución de los streams presenta una asimetria positiva, con la presencia de un valor alejado que corresponde al track "bad guy"
+# y que fue el tema mas escuchado del 2019 con una diferencia amplia sobre el resto de los tracks.
+
+
+# Histograma
+
+hist(top20anual_features[21:40,3], main = "Histograma de streams 2019")
+# Tal como lo mostraba el box-plot los datos presentan una asimetria positiva
+
+
+
+#######################################
+## --------------- 2020 ------------- #
+#######################################
+
+
+df_medias2020 = apply(top20anual_features[41:60,5:11],2,mean,na.rm = TRUE)
+df_medias2020
+# En el 2020 las canciones del ranking tendieron a ser:
+# - bailables
+# - energicas
+# - muy melodicas
+# - poco acusticas
+# - canciones que no fueron grabadas en vivo
+# - canciones con una duración promedio de 3 min.
+# - canciones con un promedio de valence de 0.5, para poder dar mayores certezas respecto a si la tendencia son canciones 
+# positivas o negativas realizo un histograma de dicha variable. 
+
+hist(top20anual_features[41:60,10], main = "Histograma de $valence")
+# Los datos mostrados por el histograma indican que las canciones se encuentran muy dispersas respecto a si son positivas o negativas
+
+
+# Grafico de Estrella
+
+df_radar2020 = rbind(max_min,df_medias2020) 
+radar_2020 = df_radar2020[c("Max","Min","3"),]
+View(radar_2020)
+radarchart(radar_2020, title= "Media de caracteristicas de tracks del 2020")
+
+
+# Mediana y Moda
+
+apply(top20anual_features[41:60,5:11],2,median,na.rm = TRUE)
+apply(top20anual_features[41:60,5:11],2,mfv,na.rm = TRUE)
+# la distribución para todas las variables es n-modal, salvo para speechiness y liveness; además las modas de cada variable reflejan 
+# las tendencias descriptas con los valores de las medias.
+
+# Varianza
+
+apply(top20anual_features[41:60,5:11],2,FUN = var, na.rm = TRUE)
+# La distribucion de los datos de todas las variables esta muy concentrada, salvo la variable duration cuyos datos 
+# presentan una varianza alta indicando que los datos estan muy dispersos.
+
+
+# Desvio estandar y Rango
+
+apply(top20anual_features[41:60,5:11],2,FUN = sd, na.rm = TRUE)
+apply(top20anual_features[41:60,5:11],2,FUN = range,na.rm = TRUE)
+# Tal como lo muestran los valores de varianza obtenidos, la variable duration tiene una distribución muy dispersa 
+# y las otras estan muy concentradas.
+
+
+# Boxplot
+
+boxplot(top20anual_features[41:60,3], main = "Boxplot de streams 2020")
+# La distribución de los streams presenta una asimetria positiva, con la presencia de dos valores alejados que corresponden a los 
+# tracks: "Blinding Lights" y "Dance Monkey", quienes fueron los temas mas escuchados del año con una diferencia amplia con 
+# respecto a los otros tracks.
+
+
+# Histograma
+
+hist(top20anual_features[41:60,3], main = "Histograma de streams 2020")
+# Tal como lo mostraba el box-plot los datos presentan una asimetria positiva
+
+
+#######################################
+## --------------- 2021 ------------- #
+#######################################
+
+
+df_medias2021 = apply(top20anual_features[61:80,5:11],2,mean,na.rm = TRUE)
+df_medias2021
+# En el 2021 las canciones del ranking tendieron a ser:
+# - bailables
+# - muy energicas
+# - melodicas
+# - poco acusticas
+# - canciones que no fueron grabadas en vivo
+# - canciones con un promedio de duración de 3 min
+# - canciones con un promedio de valence de 0.5, para poder dar mayores certezas respecto a si la tendencia son canciones 
+# positivas o negativas realizo un histograma de dicha variable. 
+
+hist(top20anual_features[61:80,10], main = "Histograma de $valence")
+# Los datos mostrados por el histograma indican que las canciones se encuentran muy dispersas respecto a si son positivas o negativas
+
+# Grafico de Estrella
+
+df_radar2021 = rbind(max_min,df_medias2021) 
+radar_2021 = df_radar2021[c("Max","Min","3"),]
+View(radar_2021)
+radarchart(radar_2021, title= "Media de caracteristicas de tracks del 2021")
+
+# Mediana y Moda
+
+apply(top20anual_features[61:80,5:11],2,median,na.rm = TRUE)
+apply(top20anual_features[61:80,5:11],2,mfv,na.rm = TRUE)
+# la distribución para todas las variables es n-modal, salvo para speechiness, acousticness, liveness y valence; además las modas de cada 
+# variable reflejan las tendencias descriptas con los valores de las medias.
+
+# Varianza
+
+apply(top20anual_features[61:80,5:11],2,FUN = var, na.rm = TRUE)
+# La distribucion de los datos de todas las variables esta muy concentrada, salvo la variable duration cuyos datos 
+# presentan una varianza alta indicando que los datos estan muy dispersos.
+
+
+# Desvio estandar y Rango
+
+apply(top20anual_features[61:80,5:11],2,FUN = sd, na.rm = TRUE)
+apply(top20anual_features[61:80,5:11],2,FUN = range,na.rm = TRUE)
+# Tal como lo muestran los valores de varianza obtenidos, la variable duration tiene una distribución muy dispersa 
+# y las otras estan muy concentradas.
+
+
+# Boxplot
+
+boxplot(top20anual_features[61:80,3], main = "Boxplot de streams 2021")
+# La distribución de los streams presenta una asimetria positiva, sin la presencia de valores alejados.
+
+
+# Histograma
+
+hist(top20anual_features[61:80,3], main = "Histograma de streams 2021")
+# Tal como lo mostraba el box-plot los datos presentan una asimetria positiva
+
+# Boxplot por anio de la cantidad de streams
+
+ggplot(data = top20anual_features, aes(x = year, y = streams)) +
+  stat_boxplot(geom = "errorbar",      # Bigotes
+               width = 0.2) +
+  geom_boxplot(fill = "#4271AE",       # Color de la caja
+               outlier.colour = "red", # Color de los valores atípicos
+               alpha = 0.9) +          # Transparencia del color de la caja
+  ggtitle("Boxplot por año de la cantidad de streams") + # Título del plot
+  ylab("Cantidad de streams")   # Etiqueta del eje y
+
+
+# 1.9 Comparación de los tracks que estuvieron entre los 20 mas escuchados por año y los que estuvieron en los puestos 80 a 100
+
+# 1.9.1 Obtención de las canciones mas escuchadas por año
+
+df_2018_top100 = charts_features %>% filter(year_start==2018) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(100,streams) 
+df_2019_top100 = charts_features %>% filter(year_start==2019) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(100,streams)
+df_2020_top100 = charts_features %>% filter(year_start==2020) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(100,streams)
+df_2021_top100 = charts_features %>% filter(year_start==2021) %>% group_by(track_id) %>% summarise(year = min(year_start),streams = sum(Streams)) %>% arrange(desc(streams)) %>% top_n(100,streams)
+
+# 1.9.2 Extracción de las canciones que estuvieron en el top 80 a 100
+
+df_2018_top80_100 = df_2018_top100[80:100,]
+df_2019_top80_100 = df_2019_top100[80:100,]
+df_2020_top80_100 = df_2020_top100[80:100,]
+df_2021_top80_100 = df_2021_top100[80:100,]
+
+# 1.9.2 Unión de las 20 canciones de cada año en un único dataframe
+
+top80_100 = rbind(df_2018_top80_100,df_2019_top80_100,df_2020_top80_100,df_2021_top80_100)
+
+# 1.9.3 2do Merge entre los tracks mas escuchados con audio_features para obtener las características de las canciones
+
+top80_100_features = merge(top80_100,df_track_features,by.x = "track_id",by.y = "track_id")
+top80_100_features = top80_100_features %>% arrange(year,desc(streams))
+View(top80_100_features)
+
+df_mediastop20 = apply(top20anual_features[,5:11],2,mean,na.rm = TRUE)
+df_mediastop20
+
+df_mediastop100 = apply(top80_100_features[,5:11],2,mean,na.rm = TRUE)
+df_mediastop100
+
+
+# Grafico de Estrella
+
+df_radar_top20 = rbind(max_min,df_mediastop20) 
+top20 = df_radar_top20[c("Max","Min","3"),]
+radarchart(top20, title= "Media de caracteristicas de tracks del top20")
+
+df_radar_top100 = rbind(max_min,df_mediastop100) 
+top100 = df_radar_top100[c("Max","Min","3"),]
+radarchart(top100, title= "Media de caracteristicas de tracks del top 80-100")
+
+# Boxplot
+
+View(top20anual_features)
+
+ggplot(data = top20anual_features, aes(x = "", y = streams)) +
+  stat_boxplot(geom = "errorbar",      # Bigotes
+               width = 0.2) +
+  geom_boxplot(fill = "#4271AE",       # Color de la caja
+               outlier.colour = "red", # Color de los valores atípicos
+               alpha = 0.9) +          # Transparencia del color de la caja
+  ggtitle("Boxplot de streams de tracks del top20") + # Título del plot
+  ylab("Cantidad de streams")    # Etiqueta del eje y
+
+
+ggplot(data = top80_100_features, aes(x = "", y = streams)) +
+  stat_boxplot(geom = "errorbar",      # Bigotes
+               width = 0.2) +
+  geom_boxplot(fill = "#4271AE",       # Color de la caja
+               outlier.colour = "red", # Color de los valores atípicos
+               alpha = 0.9) +          # Transparencia del color de la caja
+  ggtitle("Boxplot de streams de tracks del top80-100") + # Título del plot
+  ylab("Cantidad de streams")    # Etiqueta del eje y
